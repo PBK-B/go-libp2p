@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/transport"
+	"github.com/linakesi/lnksutils"
 
 	ma "github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
@@ -93,6 +95,8 @@ const ConcurrentFdDials = 160
 // per peer
 var DefaultPerPeerRateLimit = 8
 
+var logbin = lnksutils.Logger("libP2P")
+
 // DialBackoff is a type for tracking peer dial backoffs. Dialbackoff is used to
 // avoid over-dialing the same, dead peers. Whenever we totally time out on all
 // addresses of a peer, we add the addresses to DialBackoff. Then, whenever we
@@ -136,6 +140,7 @@ func (db *DialBackoff) background(ctx context.Context) {
 // Backoff returns whether the client should backoff from dialing
 // peer p at address addr
 func (db *DialBackoff) Backoff(p peer.ID, addr ma.Multiaddr) (backoff bool) {
+	// fmt.Printf("--------------- Debug Backoff p:%s addr:%s ----------------\n", p.String(), addr.String())
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
@@ -161,6 +166,7 @@ var BackoffMax = time.Minute * 5
 //
 // Where PriorBackoffs is the number of previous backoffs.
 func (db *DialBackoff) AddBackoff(p peer.ID, addr ma.Multiaddr) {
+	logbin.Error("--------------- call AddBackoff ----------------")
 	saddr := string(addr.Bytes())
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -178,10 +184,14 @@ func (db *DialBackoff) AddBackoff(p peer.ID, addr ma.Multiaddr) {
 		return
 	}
 
+	logbin.Error("--------------- AddBackoff add backoffTime ----------------")
+	logbin.Errorln(string(debug.Stack()))
+
 	backoffTime := BackoffBase + BackoffCoef*time.Duration(ba.tries*ba.tries)
 	if backoffTime > BackoffMax {
 		backoffTime = BackoffMax
 	}
+	logbin.Error("--------------- AddBackoff backoffTime:%s ----------------\n", backoffTime.String())
 	ba.until = time.Now().Add(backoffTime)
 	ba.tries++
 }
